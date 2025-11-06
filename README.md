@@ -1,97 +1,159 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# POC SSE - React Native
 
-# Getting Started
+Este projeto é uma **Proof of Concept (POC)** para validação da biblioteca [react-native-sse](https://github.com/bokuweb/react-native-sse) para implementação de **Server-Sent Events (SSE)** em aplicações React Native.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+## 📋 Sobre o Projeto
 
-## Step 1: Start Metro
+Este projeto foi criado para testar e validar a implementação de SSE em React Native, uma tecnologia interessante para comunicação em tempo real entre servidor e cliente. A aplicação demonstra um cenário de **distribuição de carga** onde múltiplos clientes podem se conectar e processar produtos em tempo real através de eventos SSE.
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+### Funcionalidades Demonstradas
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+- ✅ Conexão SSE com reconexão automática
+- ✅ Recebimento de eventos em tempo real
+- ✅ Distribuição de carga entre múltiplos clientes
+- ✅ Processamento de produtos com atualização em tempo real
+- ✅ Interface visual mostrando status da conexão, produtos e clientes conectados
+
+## 🚀 Tecnologias Utilizadas
+
+- **React Native** 0.82.1
+- **React** 19.1.1
+- **TypeScript**
+- **react-native-sse** 1.2.0
+- **Node.js** (servidor de teste)
+
+## 📦 Estrutura do Projeto
+
+```
+pocsse/
+├── features/
+│   └── sse/
+│       ├── components/
+│       │   └── SSEExample/
+│       │       ├── CargaSection.tsx      # Seção de informações da carga
+│       │       ├── ClientesSection.tsx   # Lista de clientes conectados
+│       │       ├── ControlsSection.tsx   # Controles de conexão
+│       │       ├── ErrorSection.tsx      # Exibição de erros
+│       │       ├── FinalizacaoSection.tsx # Mensagem de finalização
+│       │       ├── Header.tsx             # Cabeçalho
+│       │       ├── MessagesSection.tsx   # Histórico de mensagens SSE
+│       │       ├── ProdutoAtualSection.tsx # Produto em processamento
+│       │       ├── ProdutosSection.tsx    # Lista de produtos
+│       │       ├── StatusSection.tsx      # Status da conexão
+│       │       ├── types.ts              # Tipos TypeScript
+│       │       └── utils.ts              # Utilitários
+│       ├── hooks/
+│       │   └── useSSE.ts                 # Hook customizado para SSE
+│       ├── types/
+│       │   └── index.ts                  # Tipos compartilhados
+│       ├── SSEExample.tsx                # Componente principal
+│       └── index.ts                      # Exports
+├── test-sse-server.js                    # Servidor de teste Node.js
+└── App.tsx                               # Componente raiz
+```
+
+## 🛠️ Como Executar
+
+### Pré-requisitos
+
+- Node.js >= 20
+- React Native CLI instalado
+- Android Studio ou Xcode (dependendo da plataforma)
+
+### 1. Instalar Dependências
 
 ```sh
-# Using npm
+npm install
+```
+
+### 2. Iniciar o Servidor SSE de Teste
+
+Em um terminal, execute o servidor de teste:
+
+```sh
+node test-sse-server.js
+```
+
+O servidor estará rodando em `http://localhost:3005`
+
+### 3. Iniciar o Metro Bundler
+
+Em outro terminal:
+
+```sh
 npm start
-
-# OR using Yarn
-yarn start
 ```
 
-## Step 2: Build and run your app
+### 4. Executar a Aplicação
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
-
-### Android
+#### Android
 
 ```sh
-# Using npm
 npm run android
-
-# OR using Yarn
-yarn android
 ```
 
-### iOS
+#### iOS
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
-
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
+Primeiro, instale as dependências do CocoaPods:
 
 ```sh
+cd ios
 bundle install
-```
-
-Then, and every time you update your native dependencies, run:
-
-```sh
 bundle exec pod install
+cd ..
 ```
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
+Depois, execute:
 
 ```sh
-# Using npm
 npm run ios
-
-# OR using Yarn
-yarn ios
 ```
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
+## 📱 Como Usar
 
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
+1. **Conectar**: Toque no botão "Conectar" para estabelecer conexão SSE com o servidor
+2. **Pegar Produto**: Quando conectado, você pode pegar um produto disponível para processar
+3. **Processar**: O produto será processado automaticamente (simulação de 8-12 segundos)
+4. **Finalizar**: Após o processamento, o produto será finalizado automaticamente
+5. **Desconectar**: Use o botão "Desconectar" para fechar a conexão SSE
 
-## Step 3: Modify your app
+### Cenário de Teste
 
-Now that you have successfully run the app, let's make changes!
+A aplicação simula um cenário onde:
+- Múltiplos clientes podem se conectar simultaneamente
+- Produtos são distribuídos entre os clientes conectados
+- Um cliente simulado (backend) também processa produtos
+- Todos os clientes recebem atualizações em tempo real sobre o estado dos produtos
 
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
+## 🔧 Configuração
 
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
+O servidor SSE está configurado para rodar na porta `3005` por padrão. Para alterar, edite a constante `PORT` no arquivo `test-sse-server.js`.
 
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
+A URL do SSE pode ser configurada no componente `SSEExample.tsx` através da função `getDefaultSSEUrl()`.
 
-## Congratulations! :tada:
+## 📚 Documentação da Biblioteca
 
-You've successfully run and modified your React Native App. :partying_face:
+Para mais informações sobre a biblioteca `react-native-sse`, consulte:
+- [GitHub - react-native-sse](https://github.com/bokuweb/react-native-sse)
 
-### Now what?
+## 🎯 Objetivo da POC
 
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
+Este projeto foi criado para:
+- Validar a funcionalidade da biblioteca `react-native-sse`
+- Testar implementação de SSE em React Native
+- Avaliar performance e comportamento em tempo real
+- Criar um exemplo de uso prático de SSE
 
-# Troubleshooting
+## 📝 Notas
 
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+- Este é um projeto de **validação/estudo**, não destinado para produção
+- O servidor de teste (`test-sse-server.js`) é apenas para demonstração
+- A aplicação foi desenvolvida para testar a viabilidade de usar SSE em projetos React Native
 
-# Learn More
+## 👤 Autor
 
-To learn more about React Native, take a look at the following resources:
+**Goul4rt** - aroldogooulart@gmail.com
 
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+---
+
+**Nota**: Este projeto foi criado como uma validação de biblioteca para testar Server-Sent Events em React Native.
