@@ -131,11 +131,6 @@ O servidor SSE está configurado para rodar na porta `3005` por padrão. Para al
 
 A URL do SSE pode ser configurada no componente `SSEExample.tsx` através da função `getDefaultSSEUrl()`.
 
-## 📚 Documentação da Biblioteca
-
-Para mais informações sobre a biblioteca `react-native-sse`, consulte:
-- [GitHub - react-native-sse](https://github.com/bokuweb/react-native-sse)
-
 ## 🎯 Objetivo da POC
 
 Este projeto foi criado para:
@@ -149,11 +144,5 @@ Este projeto foi criado para:
 - Este é um projeto de **validação/estudo**, não destinado para produção
 - O servidor de teste (`test-sse-server.js`) é apenas para demonstração
 - A aplicação foi desenvolvida para testar a viabilidade de usar SSE em projetos React Native
-
-## 👤 Autor
-
-**Goul4rt** - aroldogooulart@gmail.com
-
----
 
 **Nota**: Este projeto foi criado como uma validação de biblioteca para testar Server-Sent Events em React Native.
