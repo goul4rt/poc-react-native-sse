@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { SSEService } from '../services';
+import EventSource, { EventSourceEvent } from 'react-native-sse';
 import {
   SSEConfig,
   SSEEvent,
   SSEState,
   UseSSEOptions,
   UseSSEReturn,
-  SSEEventType,
   SSEMessage
 } from '../types';
 
@@ -27,8 +26,16 @@ export function useSSE(
   const messageIdCounter = useRef(0);
   const maxMessages = options.maxMessages ?? 50;
 
-  const serviceRef = useRef<SSEService | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const configRef = useRef(config);
   const optionsRef = useRef(options);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const isConnectingRef = useRef(false);
+
+  useEffect(() => {
+    configRef.current = config;
+  }, [config]);
 
   useEffect(() => {
     optionsRef.current = options;
@@ -66,6 +73,7 @@ export function useSSE(
         isDisconnected: event.type === 'close',
         isError: event.type === 'error',
         error: event.type === 'error' ? event.error : undefined,
+        reconnectAttempts: reconnectAttemptsRef.current,
       };
 
       // Adiciona mensagem formatada ao histórico
@@ -73,6 +81,7 @@ export function useSSE(
       switch (event.type) {
         case 'open':
           messageContent = 'Conexão estabelecida';
+          reconnectAttemptsRef.current = 0;
           optionsRef.current.onOpen?.(event);
           break;
         case 'message':
@@ -119,66 +128,200 @@ export function useSSE(
     });
   }, [addMessage]);
 
-  const connect = useCallback(async () => {
-    if (!config) {
-      console.warn('useSSE: Nenhuma configuração fornecida');
-      return;
-    }
+  const attemptReconnectRef = useRef<(() => void) | undefined>(undefined);
 
-    if (!serviceRef.current) {
-      serviceRef.current = new SSEService();
-    }
+  // Função interna que realiza a conexão real
+  const doConnect = useCallback(() => {
+    const currentConfig = configRef.current;
+    if (!currentConfig) return;
 
-    const service = serviceRef.current!;
+    if (isConnectingRef.current) return;
 
-    service.on('open', handleEvent);
-    service.on('message', handleEvent);
-    service.on('error', handleEvent);
-    service.on('close', handleEvent);
-    service.on('timeout', handleEvent);
-    service.on('exception', handleEvent);
-
-    try {
-      setState(prev => ({
-        ...prev,
-        status: 'connecting',
-        isConnecting: true,
-        isDisconnected: false,
-      }));
-
-      await service.connect(config);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('useSSE: Erro ao conectar:', errorMessage, error);
-      
+    // Valida a URL
+    if (!currentConfig.url || !currentConfig.url.startsWith('http')) {
+      const error = new Error('URL inválida. Deve começar com http:// ou https://');
       setState(prev => ({
         ...prev,
         status: 'error',
         isError: true,
-        isConnecting: false,
-        error: error instanceof Error ? error : new Error(errorMessage),
+        error,
+      }));
+      handleEvent({
+        type: 'error',
+        message: error.message,
+        error,
+      });
+      return;
+    }
+
+    // Fecha conexão anterior se existir
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+
+    // Limpa timeout de reconexão se existir
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+
+    isConnectingRef.current = true;
+    setState(prev => ({
+      ...prev,
+      status: prev.status === 'reconnecting' ? 'reconnecting' : 'connecting',
+      isConnecting: true,
+      isDisconnected: false,
+    }));
+
+    try {
+      // Cria nova instância do EventSource
+      const eventSource = new EventSource(currentConfig.url, {
+        method: currentConfig.method,
+        timeout: currentConfig.timeout,
+        timeoutBeforeConnection: currentConfig.timeoutBeforeConnection,
+        withCredentials: currentConfig.withCredentials,
+        headers: currentConfig.headers,
+        body: currentConfig.body,
+        debug: currentConfig.debug,
+        pollingInterval: currentConfig.pollingInterval,
+        lineEndingCharacter: currentConfig.lineEndingCharacter,
+      });
+
+      eventSourceRef.current = eventSource;
+
+      // Listener para conexão estabelecida
+      const onOpen = () => {
+        isConnectingRef.current = false;
+        reconnectAttemptsRef.current = 0;
+        handleEvent({ type: 'open' });
+      };
+
+      // Listener para mensagens
+      const onMessage = (event: EventSourceEvent<'message'>) => {
+        handleEvent({
+          type: 'message',
+          data: event.data,
+          eventId: event.lastEventId || undefined,
+          url: event.url,
+        });
+      };
+
+      // Listener para erros
+      const onError = (event: EventSourceEvent<'error'>) => {
+        isConnectingRef.current = false;
+        const errorMessage = (event as any).message || 
+          `Erro na conexão SSE${(event as any).xhrStatus ? ` (Status: ${(event as any).xhrStatus})` : ''}`;
+        
+        const errorEvent: SSEEvent = {
+          type: 'error',
+          message: errorMessage,
+          xhrState: (event as any).xhrState,
+          xhrStatus: (event as any).xhrStatus,
+          error: (event as any).error || new Error(errorMessage),
+        };
+
+        handleEvent(errorEvent);
+
+        // Tenta reconectar automaticamente usando a ref
+        attemptReconnectRef.current?.();
+      };
+
+      // Listener para fechamento
+      const onClose = () => {
+        isConnectingRef.current = false;
+        handleEvent({ type: 'close' });
+      };
+
+      // Adiciona listeners
+      eventSource.addEventListener('open', onOpen);
+      eventSource.addEventListener('message', onMessage);
+      eventSource.addEventListener('error', onError);
+      eventSource.addEventListener('close', onClose);
+
+      // Abre a conexão
+      eventSource.open();
+
+    } catch (error) {
+      isConnectingRef.current = false;
+      const err = error instanceof Error ? error : new Error(String(error));
+      setState(prev => ({
+        ...prev,
+        status: 'error',
+        isError: true,
+        error: err,
       }));
       
-      // Notifica o callback de erro se existir
-      optionsRef.current.onError?.({
+      handleEvent({
         type: 'error',
-        message: errorMessage,
-        error: error instanceof Error ? error : new Error(errorMessage),
+        message: err.message,
+        error: err,
       });
     }
-  }, [config, handleEvent]);
+  }, [handleEvent]);
+
+  const attemptReconnect = useCallback(() => {
+    const currentConfig = configRef.current;
+    if (!currentConfig) return;
+
+    const maxAttempts = optionsRef.current.maxReconnectAttempts ?? currentConfig.maxReconnectAttempts ?? 5;
+    const reconnectOnError = optionsRef.current.reconnectOnError ?? currentConfig.reconnectOnError ?? true;
+
+    if (!reconnectOnError) return;
+
+    if (reconnectAttemptsRef.current >= maxAttempts) {
+      setState(prev => ({
+        ...prev,
+        status: 'error',
+        isError: true,
+        error: new Error(`Máximo de tentativas de reconexão atingido (${maxAttempts})`),
+      }));
+      return;
+    }
+
+    reconnectAttemptsRef.current++;
+    const interval = optionsRef.current.reconnectInterval ?? currentConfig.reconnectInterval ?? 1000;
+    const delay = interval * Math.pow(2, reconnectAttemptsRef.current - 1);
+
+    setState(prev => ({
+      ...prev,
+      status: 'reconnecting',
+      reconnectAttempts: reconnectAttemptsRef.current,
+    }));
+
+    reconnectTimeoutRef.current = setTimeout(() => {
+      doConnect();
+    }, delay);
+  }, [doConnect]);
+
+  // Atualiza a ref para evitar dependência circular
+  attemptReconnectRef.current = attemptReconnect;
+
+  const connect = useCallback(async () => {
+    const currentConfig = configRef.current;
+    if (!currentConfig) {
+      console.warn('useSSE: Nenhuma configuração fornecida');
+      return;
+    }
+
+    doConnect();
+  }, [doConnect]);
 
   const disconnect = useCallback(() => {
-    if (serviceRef.current) {
-      serviceRef.current!.disconnect();
-
-      serviceRef.current!.off('open', handleEvent);
-      serviceRef.current!.off('message', handleEvent);
-      serviceRef.current!.off('error', handleEvent);
-      serviceRef.current!.off('close', handleEvent);
-      serviceRef.current!.off('timeout', handleEvent);
-      serviceRef.current!.off('exception', handleEvent);
+    // Limpa timeout de reconexão
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
     }
+
+    // Fecha conexão
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+
+    isConnectingRef.current = false;
+    reconnectAttemptsRef.current = 0;
 
     setState({
       status: 'disconnected',
@@ -188,26 +331,13 @@ export function useSSE(
       isError: false,
       reconnectAttempts: 0,
     });
-  }, [handleEvent]);
+  }, []);
 
   const reconnect = useCallback(async () => {
-    if (!serviceRef.current || !config) {
-      await connect();
-      return;
-    }
-
-    try {
-      setState(prev => ({
-        ...prev,
-        status: 'reconnecting',
-        reconnectAttempts: prev.reconnectAttempts + 1,
-      }));
-
-      await serviceRef.current!.reconnect();
-    } catch (error) {
-      console.error('useSSE: Erro ao reconectar:', error);
-    }
-  }, [config, connect]);
+    disconnect();
+    reconnectAttemptsRef.current = 0;
+    await connect();
+  }, [connect, disconnect]);
 
   useEffect(() => {
     if (config && options.enabled !== false) {
@@ -215,17 +345,15 @@ export function useSSE(
     }
 
     return () => {
-      if (options.enabled !== false) {
-        disconnect();
-      }
+      disconnect();
     };
-  }, [config?.url, options.enabled, connect, disconnect]);
+  }, [config?.url, options.enabled]);
 
   useEffect(() => {
     return () => {
       disconnect();
     };
-  }, [disconnect]);
+  }, []);
 
   const isConnected = state.status === 'connected';
   const isConnecting = state.status === 'connecting' || state.status === 'reconnecting';

@@ -159,7 +159,7 @@ export function SSEExample() {
           {messages.length === 0 ? (
             <Text style={styles.emptyText}>Nenhuma mensagem recebida ainda</Text>
           ) : (
-            messages.map((message) => (
+            messages.reverse().map((message) => (
               <Text key={message.id} style={styles.messageText}>
                 {message.timestamp.toLocaleTimeString()}: {message.content}
               </Text>

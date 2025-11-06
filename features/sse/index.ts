@@ -9,7 +9,6 @@ export type {
   ISSEService,
 } from './types';
 
-export { SSEService } from './services';
 export type { ISSEService as ISSEServiceType } from './types';
 
 export { useSSE } from './hooks';
